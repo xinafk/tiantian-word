@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>天天背单词 v7.0</title>
+    <title>天天背单词 2.0</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#4A90E2">
     <style>
@@ -25,11 +25,12 @@
         .btn-outline { background-color: transparent; border: 2px solid #4A90E2; color: #4A90E2; box-shadow: none; }
         .btn-speak { background: #E1F5FE; color: #0277BD; width: auto; padding: 8px 16px; border-radius: 20px; display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
 
-        input[type="text"] { width: 80%; padding: 14px; font-size: 20px; border: 2px solid #eee; border-radius: 12px; margin-bottom: 15px; text-align: center; outline: none; transition: border 0.3s; }
-        input[type="text"]:focus { border-color: #4A90E2; }
+        /* 输入框优化 */
+        input[type="text"], textarea { width: 80%; padding: 14px; font-size: 20px; border: 2px solid #eee; border-radius: 12px; margin-bottom: 15px; text-align: center; outline: none; transition: border 0.3s; resize: none; font-family: inherit; }
+        input[type="text"]:focus, textarea:focus { border-color: #4A90E2; }
+        
         .input-group { width: 90%; max-width: 400px; display: flex; flex-direction: column; align-items: center; }
 
-        /* 状态与文本 */
         .hidden { display: none !important; }
         .flash-success { animation: flashGreen 0.5s; }
         @keyframes flashGreen { 0% { background-color: #e8f5e9; transform: scale(1.02); } 100% { background-color: white; transform: scale(1); } }
@@ -37,7 +38,7 @@
         @keyframes shake { 0% { transform: translateX(0); } 25% { transform: translateX(-10px); } 75% { transform: translateX(10px); } 100% { transform: translateX(0); } }
         
         .word-text { font-size: 40px; color: #333; font-weight: bold; margin: 10px 0; font-family: 'Arial Rounded MT Bold', sans-serif; cursor: pointer; }
-        .meaning-text { font-size: 24px; color: #1565C0; font-weight: bold; margin: 10px 0; line-height: 1.4; } 
+        .meaning-text { font-size: 24px; color: #1565C0; font-weight: bold; margin: 10px 0; line-height: 1.4; word-wrap: break-word; } 
         .sub-text { color: #888; font-size: 16px; margin-bottom: 20px; }
         
         /* 等级栏 */
@@ -56,7 +57,7 @@
 <body>
 
 <canvas id="confetti-canvas"></canvas>
-<div class="header">天天背单词 v7.0</div>
+<div class="header">天天背单词 2.0</div>
 
 <div id="page-home" class="container">
     <div class="card" style="background: linear-gradient(to right, #ffffff, #f9f9f9);">
@@ -83,16 +84,30 @@
 </div>
 
 <div id="page-study" class="container hidden">
+    <div id="phase-learn" class="card hidden">
+        <div class="phase-tag" style="background:#e8f5e9; color:#2e7d32;">第 1 步：预习记忆</div>
+        <div class="sub-text">请看清单词并记住它</div>
+        <div onclick="speakCurrentLearnWord()" class="word-text" id="learn-spelling"></div>
+        <div id="learn-meaning" class="meaning-text"></div>
+        <div id="learn-pos" class="sub-text"></div>
+        <div class="btn-speak" onclick="speakCurrentLearnWord()">🔊 听发音</div>
+        <div style="margin-top: 30px;">
+            <button class="btn btn-success" onclick="nextLearnCard()">👌 记住了，下一个</button>
+        </div>
+    </div>
+
     <div id="phase-spell" class="card hidden">
-        <div class="phase-tag" style="background:#e3f2fd; color:#1565c0;">第 1 关：拼写挑战</div>
+        <div class="phase-tag" style="background:#e3f2fd; color:#1565c0;">第 2 步：拼写默写</div>
         <div class="sub-text">请根据中文写出英文</div>
         <div id="spell-meaning" class="meaning-text"></div>
         <div id="spell-pos" class="sub-text"></div>
         <input type="text" id="input-spell" placeholder="输入英文" autocomplete="off" onkeyup="if(event.keyCode===13) submitSpelling()">
-        <button class="btn btn-primary" onclick="submitSpelling()">确定</button>
+        <button class="btn btn-primary" onclick="submitSpelling()">✅ 确定</button>
+        <button class="btn btn-danger" onclick="skipSpelling()">😭 不会 / 跳过</button>
     </div>
+
     <div id="phase-recall" class="card hidden">
-        <div class="phase-tag" style="background:#fff3e0; color:#e65100;">第 2 关：开口说</div>
+        <div class="phase-tag" style="background:#fff3e0; color:#e65100;">第 3 步：开口说</div>
         <div class="sub-text">请大声说出中文意思</div>
         <div onclick="speakCurrentWord()" class="word-text" id="recall-spelling"></div>
         <div class="btn-speak" onclick="speakCurrentWord()">🔊 点我发音</div>
@@ -125,78 +140,54 @@
     <div class="card" style="margin-top: 50px;">
         <h3>智能录入</h3>
         <div class="input-group">
-            <input type="text" id="new-spell" placeholder="英文 (如 book)" onblur="autoAnalyzeWord()" onkeyup="if(event.keyCode===13) autoAnalyzeWord()">
+            <input type="text" id="new-spell" placeholder="在此输入英文 (如 apple)" onblur="autoAnalyzeWord()" onkeyup="if(event.keyCode===13) autoAnalyzeWord()">
             <div id="network-status" style="height:20px; font-size:12px; color:#666; margin-bottom:5px;"></div>
-            <input type="text" id="new-pos" placeholder="词性 (自动)">
-            <input type="text" id="new-meaning" placeholder="中文 (自动)">
+            
+            <div id="word-details" class="hidden" style="width:100%; display:flex; flex-direction:column; align-items:center;">
+                <input type="text" id="new-pos" placeholder="词性 (自动)">
+                <textarea id="new-meaning" rows="3" placeholder="中文 (自动填入，支持多行)"></textarea>
+                <button class="btn btn-primary" onclick="saveNewWord()">💾 确认保存</button>
+            </div>
         </div>
-        <button class="btn btn-primary" onclick="saveNewWord()">💾 保存</button>
         <button class="btn btn-outline" onclick="hideAddModal()">❌ 关闭</button>
     </div>
 </div>
 
 <script>
-    // --- 0. 本地核心词库 (包含你提到的词) ---
-    const CORE_DICT = {
-        "expensive": "adj. 昂贵的", "cheap": "adj. 便宜的", "pear": "n. 梨", "apple": "n. 苹果", "banana": "n. 香蕉",
-        "orange": "n. 橙子", "watermelon": "n. 西瓜", "grape": "n. 葡萄", "strawberry": "n. 草莓", "fruit": "n. 水果",
-        "vegetable": "n. 蔬菜", "tomato": "n. 西红柿", "potato": "n. 土豆", "carrot": "n. 胡萝卜",
-        "good": "adj. 好的", "bad": "adj. 坏的", "happy": "adj. 快乐的", "sad": "adj. 悲伤的",
-        "big": "adj. 大的", "small": "adj. 小的", "long": "adj. 长的", "short": "adj. 短的",
-        "hot": "adj. 热的", "cold": "adj. 冷的", "warm": "adj. 暖和的", "cool": "adj. 凉爽的",
-        "teacher": "n. 老师", "student": "n. 学生", "doctor": "n. 医生", "driver": "n. 司机",
-        "book": "n. 书", "pen": "n. 钢笔", "pencil": "n. 铅笔", "ruler": "n. 尺子", "bag": "n. 书包",
-        "cat": "n. 猫", "dog": "n. 狗", "bird": "n. 鸟", "fish": "n. 鱼", "elephant": "n. 大象",
-        "tiger": "n. 老虎", "lion": "n. 狮子", "monkey": "n. 猴子", "panda": "n. 熊猫",
-        "run": "v. 跑", "jump": "v. 跳", "eat": "v. 吃", "drink": "v. 喝", "sleep": "v. 睡觉",
-        "play": "v. 玩", "study": "v. 学习", "work": "v. 工作", "cook": "v. 做饭",
-        "red": "adj. 红色的", "blue": "adj. 蓝色的", "green": "adj. 绿色的", "yellow": "adj. 黄色的",
-        "white": "adj. 白色的", "black": "adj. 黑色的", "today": "n. 今天", "tomorrow": "n. 明天",
-        "morning": "n. 早上", "afternoon": "n. 下午", "evening": "n. 晚上", "beautiful": "adj. 美丽的",
-        "delicious": "adj. 美味的", "interesting": "adj. 有趣的", "difficult": "adj. 困难的", "easy": "adj. 容易的"
-    };
-
-    // --- 1. 双引擎查词逻辑 ---
+    // --- 1. 纯在线查词逻辑 ---
     function autoAnalyzeWord() {
         let raw = document.getElementById('new-spell').value.trim();
         if(!raw) return;
-        let word = raw.toLowerCase();
+        
         let status = document.getElementById('network-status');
-        let posInput = document.getElementById('new-pos');
-        let meanInput = document.getElementById('new-meaning');
+        let detailsDiv = document.getElementById('word-details');
 
-        if(CORE_DICT[word]) {
-            let parts = CORE_DICT[word].split(' ');
-            let pos = parts[0];
-            let mean = parts.slice(1).join(' ');
-            posInput.value = pos;
-            meanInput.value = mean;
-            status.innerText = "⚡ 本地库命中";
-            flashInput();
-            return; 
-        }
+        // 查词时尝试激活音频环境
+        initAudio();
 
         status.innerText = "☁️ 正在联网查询...";
         let script = document.createElement('script');
+        // 加时间戳防缓存
         script.src = `https://dict.youdao.com/suggest?q=${raw}&num=1&doctype=json&callback=handleYoudaoResponse&t=${new Date().getTime()}`;
         document.body.appendChild(script);
         
+        // 超时兜底：4秒没反应就显示输入框让用户手填
         setTimeout(()=>{
             if(status.innerText.includes("联网")) {
                 status.innerText = "⚠️ 网络稍慢，请手动输入";
+                detailsDiv.classList.remove('hidden'); 
             }
         }, 4000);
     }
 
-    // 优化后的联网回调处理 (全义保留版)
     window.handleYoudaoResponse = function(d) {
         let status = document.getElementById('network-status');
         let posInput = document.getElementById('new-pos');
         let meanInput = document.getElementById('new-meaning');
+        let detailsDiv = document.getElementById('word-details');
 
         if(d && d.entries && d.entries.length) {
             let explain = d.entries[0].explain; 
-            
             let dotIndex = explain.indexOf('.');
             if (dotIndex > -1 && dotIndex < 10) {
                 posInput.value = explain.substring(0, dotIndex + 1); 
@@ -206,21 +197,15 @@
                 posInput.value = "";
                 meanInput.value = explain;
             }
-            
-            status.innerText = "✅ 云端获取成功";
-            flashInput();
+            status.innerText = "✅ 获取成功，请确认";
+            detailsDiv.classList.remove('hidden'); 
         } else {
-            status.innerText = "❌ 未找到，请手动输入";
+            status.innerText = "❌ 未找到，请手动补充";
+            detailsDiv.classList.remove('hidden'); 
         }
     };
 
-    function flashInput() {
-        let p = document.getElementById('new-pos').parentElement;
-        p.classList.add('flash-success');
-        setTimeout(()=>p.classList.remove('flash-success'), 500);
-    }
-
-    // --- 2. 音效与朗读 (防拦截版) ---
+    // --- 2. 音效与朗读 (手机发音修复版) ---
     let audioCtx = null;
     function initAudio() {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -248,6 +233,8 @@
     }
     function speakText(text) {
         if ('speechSynthesis' in window) {
+            // 关键修复：先取消正在读的，防止堵塞
+            window.speechSynthesis.cancel();
             const u = new SpeechSynthesisUtterance(text);
             u.lang = 'en-US'; u.rate = 0.9;
             window.speechSynthesis.speak(u);
@@ -267,24 +254,68 @@
         document.getElementById('level-fill').style.width = `${Math.min(((t-p)/(n-p))*100, 100)}%`;
     }
 
-    let sessionWords=[], spellQueue=[], recallQueue=[], errorSet=new Set(), currentSpellWord=null, currentRecallWord=null;
+    let sessionWords=[], learnQueue=[], spellQueue=[], recallQueue=[], errorSet=new Set();
+    let currentLearnWord=null, currentSpellWord=null, currentRecallWord=null;
+
     function startSession() {
         initAudio();
+        // 关键修复：开始背诵时，强制初始化语音引擎，解决部分安卓机第一次不发声问题
+        if('speechSynthesis' in window) window.speechSynthesis.cancel();
+
         let now = new Date().setHours(0,0,0,0);
         sessionWords = words.filter(w => w.nextReview <= now);
         if(sessionWords.length === 0) return alert("太棒了！今天没有任务啦！");
         errorSet.clear();
+        
         const shuffle = arr => arr.sort(() => Math.random() - 0.5);
-        spellQueue = shuffle([...sessionWords]); recallQueue = shuffle([...sessionWords]);
-        document.getElementById('page-home').classList.add('hidden'); document.getElementById('page-study').classList.remove('hidden');
-        loadSpellCard();
+        learnQueue = [...sessionWords]; 
+        spellQueue = shuffle([...sessionWords]); 
+        recallQueue = shuffle([...sessionWords]);
+        
+        document.getElementById('page-home').classList.add('hidden'); 
+        document.getElementById('page-study').classList.remove('hidden');
+        loadLearnCard();
     }
+
+    // --- 预习关 ---
+    function loadLearnCard() {
+        if (learnQueue.length === 0) { 
+            alert("👏 预习完成！准备开始拼写默写！"); 
+            loadSpellCard(); 
+            return; 
+        }
+        currentLearnWord = learnQueue[0];
+        document.getElementById('phase-learn').classList.remove('hidden');
+        document.getElementById('phase-spell').classList.add('hidden');
+        document.getElementById('phase-recall').classList.add('hidden');
+        document.getElementById('learn-spelling').innerText = currentLearnWord.spelling;
+        document.getElementById('learn-meaning').innerText = currentLearnWord.meaning;
+        document.getElementById('learn-pos').innerText = currentLearnWord.pos;
+        speakText(currentLearnWord.spelling);
+    }
+    function nextLearnCard() {
+        learnQueue.shift(); loadLearnCard();
+    }
+    function speakCurrentLearnWord() {
+        initAudio();
+        if(currentLearnWord) speakText(currentLearnWord.spelling);
+    }
+
+    // --- 拼写关 ---
     function loadSpellCard() {
-        if (spellQueue.length === 0) { alert("👏 第一关完成！进入口语发音关！"); loadRecallCard(); return; }
+        if (spellQueue.length === 0) { 
+            alert("👏 默写完成！进入口语发音关！"); 
+            loadRecallCard(); 
+            return; 
+        }
         currentSpellWord = spellQueue[0];
-        document.getElementById('phase-spell').classList.remove('hidden'); document.getElementById('phase-recall').classList.add('hidden');
-        document.getElementById('spell-meaning').innerText=currentSpellWord.meaning; document.getElementById('spell-pos').innerText=currentSpellWord.pos;
-        document.getElementById('input-spell').value=''; document.getElementById('input-spell').focus();
+        document.getElementById('phase-learn').classList.add('hidden');
+        document.getElementById('phase-spell').classList.remove('hidden');
+        document.getElementById('phase-recall').classList.add('hidden');
+        document.getElementById('spell-meaning').innerText=currentSpellWord.meaning; 
+        document.getElementById('spell-pos').innerText=currentSpellWord.pos;
+        document.getElementById('input-spell').value=''; 
+        document.getElementById('input-spell').focus();
     }
     function submitSpelling() {
         let i = document.getElementById('input-spell').value.trim();
@@ -292,18 +323,27 @@
         if(!i) return;
         if(i.toLowerCase()===currentSpellWord.spelling.toLowerCase()){
             playSound('correct'); spellQueue.shift(); loadSpellCard();
-        } else {
-            playSound('wrong'); 
-            let c=document.getElementById('phase-spell'); c.classList.add('shake'); setTimeout(()=>c.classList.remove('shake'),500);
-            alert(`❌ 错了！正确写法是：${currentSpellWord.spelling}`);
-            errorSet.add(currentSpellWord); spellQueue.shift(); loadSpellCard();
-        }
+        } else { handleSpellError(); }
     }
+    function skipSpelling() {
+        initAudio(); handleSpellError();
+    }
+    function handleSpellError() {
+        playSound('wrong'); 
+        let c=document.getElementById('phase-spell'); c.classList.add('shake'); setTimeout(()=>c.classList.remove('shake'),500);
+        alert(`❌ 正确写法是：${currentSpellWord.spelling}`);
+        errorSet.add(currentSpellWord); spellQueue.shift(); loadSpellCard();
+    }
+
+    // --- 回忆关 ---
     function loadRecallCard() {
         if (recallQueue.length === 0) { finishSession(); return; }
         currentRecallWord = recallQueue[0];
-        document.getElementById('phase-spell').classList.add('hidden'); document.getElementById('phase-recall').classList.remove('hidden');
-        document.getElementById('recall-cover').classList.remove('hidden'); document.getElementById('recall-answer').classList.add('hidden');
+        document.getElementById('phase-learn').classList.add('hidden');
+        document.getElementById('phase-spell').classList.add('hidden'); 
+        document.getElementById('phase-recall').classList.remove('hidden');
+        document.getElementById('recall-cover').classList.remove('hidden'); 
+        document.getElementById('recall-answer').classList.add('hidden');
         document.getElementById('recall-spelling').innerText=currentRecallWord.spelling;
         speakText(currentRecallWord.spelling);
     }
@@ -347,7 +387,11 @@
         if(words.find(w=>w.spelling.toLowerCase()===s.toLowerCase())) return alert("已存在");
         words.push({spelling:s, pos:p, meaning:m, nextReview:new Date().setHours(0,0,0,0), interval:1, easeFactor:2.5, repetitions:0});
         saveToStorage(); updateLevel();
-        document.getElementById('new-spell').value=''; document.getElementById('new-pos').value=''; document.getElementById('new-meaning').value='';
+        document.getElementById('new-spell').value=''; 
+        document.getElementById('new-pos').value=''; 
+        document.getElementById('new-meaning').value='';
+        document.getElementById('word-details').classList.add('hidden'); 
+        document.getElementById('network-status').innerText='';
         document.getElementById('new-spell').focus();
     }
     function showAddModal() { document.getElementById('modal-add').classList.remove('hidden'); document.getElementById('new-spell').focus(); }
@@ -363,7 +407,7 @@
         document.getElementById('word-list').innerHTML = words.slice().reverse().map(w=>`
             <div style="border-bottom:1px solid #eee; padding:10px; display:flex; justify-content:space-between; align-items:center;">
                 <span onclick="speakText('${w.spelling}')">🔊 <b>${w.spelling}</b></span>
-                <span style="font-size:14px; color:#666;">${w.meaning}</span>
+                <span style="font-size:14px; color:#666; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; max-width:150px;">${w.meaning}</span>
             </div>`).join('');
     }
     function showStats() {
