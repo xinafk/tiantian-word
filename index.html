@@ -3,22 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>天天背单词</title>
+    <title>天天背单词 (统计增强版)</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#4A90E2">
     <style>
-        /* --- 样式表 (CSS) --- */
+        /* --- 全局样式 --- */
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f4f7f6; margin: 0; padding: 0; height: 100vh; display: flex; flex-direction: column; }
         .header { background-color: #4A90E2; color: white; padding: 15px; text-align: center; font-size: 20px; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
         .container { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; }
         
-        /* 卡片样式 */
-        .card { background: white; border-radius: 12px; padding: 25px; width: 90%; max-width: 400px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); text-align: center; margin-bottom: 20px; }
+        /* 卡片通用 */
+        .card { background: white; border-radius: 12px; padding: 20px; width: 90%; max-width: 400px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); text-align: center; margin-bottom: 20px; }
+        
+        /* 文字样式 */
         .word-text { font-size: 36px; color: #333; font-weight: bold; margin: 10px 0; }
         .meaning-text { font-size: 28px; color: #1565C0; font-weight: bold; margin: 10px 0; }
         .sub-text { color: #888; font-size: 16px; margin-bottom: 20px; }
-        
-        /* 按钮样式 */
+        .phase-tag { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 14px; margin-bottom: 15px; font-weight: bold; }
+
+        /* 按钮 */
         .btn { border: none; border-radius: 8px; padding: 12px 24px; font-size: 16px; margin: 5px; cursor: pointer; width: 100%; max-width: 300px; transition: 0.2s; }
         .btn-primary { background-color: #4A90E2; color: white; }
         .btn-success { background-color: #66BB6A; color: white; }
@@ -27,15 +30,25 @@
         .btn:active { transform: scale(0.98); }
 
         /* 输入框 */
-        input[type="text"] { width: 80%; padding: 12px; font-size: 18px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 15px; text-align: center; }
+        input[type="text"] { width: 80%; padding: 12px; font-size: 18px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 10px; text-align: center; }
+        .input-group { width: 90%; max-width: 400px; display: flex; flex-direction: column; align-items: center; }
 
-        /* 隐藏/显示控制 */
+        /* 工具类 */
         .hidden { display: none !important; }
+        .flash-success { animation: flashGreen 1s; }
+        @keyframes flashGreen { 0% { background-color: #e8f5e9; } 100% { background-color: white; } }
         
-        /* 底部导航 */
-        .nav { background: white; border-top: 1px solid #eee; padding: 10px; display: flex; justify-content: space-around; width: 100%; position: fixed; bottom: 0; }
-        .nav-item { color: #888; font-size: 14px; text-align: center; flex: 1; padding: 5px; cursor: pointer; }
-        .nav-item.active { color: #4A90E2; font-weight: bold; }
+        /* 统计图表样式 */
+        .stats-grid { display: flex; justify-content: space-around; width: 100%; margin-bottom: 20px; }
+        .stat-item { text-align: center; }
+        .stat-num { font-size: 24px; font-weight: bold; color: #333; }
+        .stat-label { font-size: 12px; color: #999; }
+        
+        .chart-container { display: flex; align-items: flex-end; justify-content: space-between; height: 150px; padding-top: 20px; border-bottom: 1px solid #eee; width: 100%; }
+        .chart-bar-group { display: flex; flex-direction: column; align-items: center; flex: 1; }
+        .chart-bar { width: 12px; background-color: #e3f2fd; border-radius: 4px 4px 0 0; transition: height 0.5s; min-height: 4px; }
+        .chart-bar.active { background-color: #4A90E2; }
+        .chart-date { font-size: 10px; color: #999; margin-top: 5px; }
     </style>
 </head>
 <body>
@@ -50,34 +63,43 @@
         <button class="btn btn-primary" onclick="startSession()">开始背诵</button>
     </div>
     
+    <div class="card" onclick="showStats()" style="cursor: pointer;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span>📊 学习统计</span>
+            <span style="color:#999;">查看进度 ></span>
+        </div>
+    </div>
+    
     <div style="width: 100%; max-width: 400px; text-align: left;">
         <h4>家长录入区</h4>
-        <div id="word-list" style="background: white; border-radius: 8px; padding: 10px; height: 200px; overflow-y: scroll;">
-            </div>
+        <div id="word-list" style="background: white; border-radius: 8px; padding: 10px; height: 200px; overflow-y: scroll;"></div>
     </div>
     <button class="btn btn-outline" style="margin-top:10px;" onclick="showAddModal()">+ 录入新词</button>
 </div>
 
 <div id="page-study" class="container hidden">
-    <div id="phase-spell" class="card">
+    <div id="phase-spell" class="card hidden">
+        <div class="phase-tag" style="background:#e3f2fd; color:#1565c0;">第 1 关：拼写挑战</div>
         <div class="sub-text">请根据中文写出英文</div>
-        <div id="study-meaning" class="meaning-text">苹果</div>
-        <div id="study-pos" class="sub-text">n.</div>
-        <input type="text" id="input-spell" placeholder="在此输入英文" autocomplete="off">
+        <div id="spell-meaning" class="meaning-text"></div>
+        <div id="spell-pos" class="sub-text"></div>
+        <input type="text" id="input-spell" placeholder="输入英文" autocomplete="off" onkeyup="if(event.keyCode===13) submitSpelling()">
         <div id="spell-msg" style="height: 20px; color: red; margin-bottom: 10px;"></div>
-        <button class="btn btn-primary" onclick="checkSpelling()">确定</button>
+        <button class="btn btn-primary" onclick="submitSpelling()">确定</button>
     </div>
 
     <div id="phase-recall" class="card hidden">
-        <div class="sub-text">大声说出中文意思</div>
-        <div id="study-spelling-display" class="word-text">Apple</div>
+        <div class="phase-tag" style="background:#fff3e0; color:#e65100;">第 2 关：开口说</div>
+        <div class="sub-text">请大声说出中文意思</div>
+        <div id="recall-spelling" class="word-text"></div>
         
         <div id="recall-cover">
             <button class="btn btn-outline" onclick="revealAnswer()">查看答案</button>
         </div>
         
         <div id="recall-answer" class="hidden">
-            <div id="study-meaning-answer" class="meaning-text">苹果</div>
+            <div id="recall-meaning" class="meaning-text"></div>
+            <div id="recall-pos" class="sub-text"></div>
             <div style="margin-top: 20px;">
                 <button class="btn btn-danger" onclick="rateWord(1)">忘了 (重来)</button>
                 <button class="btn btn-success" onclick="rateWord(5)">记得 (通过)</button>
@@ -86,29 +108,75 @@
     </div>
 </div>
 
+<div id="page-stats" class="container hidden">
+    <div class="card">
+        <h3>学习数据看板</h3>
+        <div class="stats-grid">
+            <div class="stat-item">
+                <div class="stat-num" id="stat-total-words">0</div>
+                <div class="stat-label">总单词</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-num" id="stat-days">0</div>
+                <div class="stat-label">坚持天数</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-num" id="stat-mastered">0</div>
+                <div class="stat-label">已掌握</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>近7天学习量</h3>
+        <div class="chart-container" id="chart-week">
+            </div>
+    </div>
+
+    <button class="btn btn-outline" onclick="goHome()">返回首页</button>
+</div>
+
 <div id="modal-add" class="container hidden" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index: 10;">
     <div class="card" style="margin-top: 50px;">
-        <h3>录入新词</h3>
-        <input type="text" id="new-spell" placeholder="英文 (如 apple)">
-        <input type="text" id="new-pos" placeholder="词性 (如 n.)">
-        <input type="text" id="new-meaning" placeholder="中文 (如 苹果)">
-        <button class="btn btn-primary" onclick="saveNewWord()">保存</button>
-        <button class="btn btn-outline" onclick="hideAddModal()">取消</button>
+        <h3>智能录入</h3>
+        <div class="input-group">
+            <input type="text" id="new-spell" placeholder="输入英文 (如 book)" onblur="autoFill()" onkeyup="if(event.keyCode===13) autoFill()">
+            <input type="text" id="new-pos" placeholder="词性 (自动生成)">
+            <input type="text" id="new-meaning" placeholder="中文 (自动生成)">
+        </div>
+        <button class="btn btn-primary" onclick="saveNewWord()">保存并继续</button>
+        <button class="btn btn-outline" onclick="hideAddModal()">关闭</button>
     </div>
 </div>
 
 <script>
-    // --- 逻辑代码 (JavaScript) ---
-    
-    // 1. 数据结构与存储
+    // --- 0. 内置字典 (可自行扩充) ---
+    const MINI_DICT = {
+        "apple": ["n.", "苹果"], "banana": ["n.", "香蕉"], "book": ["n.", "书"], "cat": ["n.", "猫"], 
+        "dog": ["n.", "狗"], "elephant": ["n.", "大象"], "run": ["v.", "跑"], "eat": ["v.", "吃"],
+        "student": ["n.", "学生"], "teacher": ["n.", "老师"], "good": ["adj.", "好的"], "happy": ["adj.", "快乐的"]
+    };
+
+    // --- 1. 数据管理 ---
     let words = JSON.parse(localStorage.getItem('tiantian_words')) || [];
+    let stats = JSON.parse(localStorage.getItem('tiantian_stats')) || {}; // 格式: {"2023-10-01": 5}
 
     function saveToStorage() {
         localStorage.setItem('tiantian_words', JSON.stringify(words));
+        localStorage.setItem('tiantian_stats', JSON.stringify(stats));
     }
 
-    // 2. 核心算法 (SM-2 JS版)
+    // 记录统计数据
+    function logActivity(count) {
+        if(count <= 0) return;
+        let today = new Date().toISOString().split('T')[0];
+        stats[today] = (stats[today] || 0) + count;
+        saveToStorage();
+    }
+
+    // --- 2. 核心算法 (SM-2) ---
     function updateMemory(word, quality) {
+        // quality: 0=忘/错, 5=对
         if (quality >= 3) {
             if (word.repetitions === 0) word.interval = 1;
             else if (word.repetitions === 1) word.interval = 6;
@@ -123,97 +191,115 @@
         let nextDate = new Date();
         nextDate.setHours(0,0,0,0);
         nextDate.setDate(nextDate.getDate() + word.interval);
-        word.nextReview = nextDate.getTime(); // 存时间戳方便比较
+        word.nextReview = nextDate.getTime();
     }
 
-    // 3. 界面逻辑
-    let reviewList = [];
-    let currentWord = null;
+    // --- 3. 页面逻辑 ---
+    // 运行时变量
+    let sessionWords = [];     // 原始需要复习的列表
+    let spellQueue = [];       // 拼写队列 (乱序)
+    let recallQueue = [];      // 回忆队列 (乱序)
+    let errorSet = new Set();  // 记录拼写阶段错的词ID
 
+    // 工具: 数组乱序
+    function shuffle(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+    }
+
+    // 渲染首页
     function renderHome() {
-        // 计算今日任务
         let now = new Date().setHours(0,0,0,0);
         let count = words.filter(w => w.nextReview <= now).length;
         document.getElementById('today-count').innerText = count;
 
-        // 渲染列表
-        let listHtml = words.map(w => 
-            `<div style="border-bottom:1px solid #eee; padding:5px;">
-                <b>${w.spelling}</b> - ${w.meaning} 
-                <span style="font-size:12px; color:#999">(${new Date(w.nextReview).getMonth()+1}.${new Date(w.nextReview).getDate()})</span>
+        let listHtml = words.slice().reverse().map(w => 
+            `<div style="border-bottom:1px solid #eee; padding:8px; display:flex; justify-content:space-between;">
+                <span><b>${w.spelling}</b> <span style="font-size:12px;color:#888;">${w.pos}</span></span>
+                <span>${w.meaning}</span>
              </div>`
         ).join('');
-        document.getElementById('word-list').innerHTML = listHtml || '<div style="color:#999; text-align:center;">暂无单词</div>';
+        document.getElementById('word-list').innerHTML = listHtml || '<div style="color:#999; text-align:center; padding:20px;">暂无单词</div>';
     }
 
-    function showAddModal() { document.getElementById('modal-add').classList.remove('hidden'); }
-    function hideAddModal() { document.getElementById('modal-add').classList.add('hidden'); }
-
-    function saveNewWord() {
-        let s = document.getElementById('new-spell').value.trim();
-        let p = document.getElementById('new-pos').value.trim();
-        let m = document.getElementById('new-meaning').value.trim();
-        if(!s || !m) return alert("请填写完整");
-        
-        words.push({
-            spelling: s, pos: p, meaning: m,
-            nextReview: new Date().setHours(0,0,0,0), // 今天
-            interval: 1, easeFactor: 2.5, repetitions: 0
-        });
-        saveToStorage();
-        document.getElementById('new-spell').value = '';
-        document.getElementById('new-meaning').value = '';
-        hideAddModal();
-        renderHome();
-    }
-
-    // --- 背诵流程 ---
+    // 开始背诵
     function startSession() {
         let now = new Date().setHours(0,0,0,0);
-        reviewList = words.filter(w => w.nextReview <= now);
-        if(reviewList.length === 0) return alert("今天没有任务啦！");
+        sessionWords = words.filter(w => w.nextReview <= now);
         
+        if(sessionWords.length === 0) return alert("太棒了！今天没有任务啦！");
+
+        // 准备队列
+        errorSet.clear();
+        // 浅拷贝并乱序，用于拼写阶段
+        spellQueue = shuffle([...sessionWords]); 
+        // 浅拷贝并乱序，用于回忆阶段 (确保顺序不一样)
+        recallQueue = shuffle([...sessionWords]);
+
         document.getElementById('page-home').classList.add('hidden');
         document.getElementById('page-study').classList.remove('hidden');
-        loadNextCard();
+        
+        loadSpellCard();
     }
 
-    function loadNextCard() {
-        if(reviewList.length === 0) {
-            alert("今日打卡完成！");
-            location.reload();
+    // --- A. 拼写阶段 ---
+    let currentSpellWord = null;
+    
+    function loadSpellCard() {
+        if (spellQueue.length === 0) {
+            // 拼写阶段结束，进入回忆阶段
+            alert("第一关拼写完成！准备进入第二关回忆测试！");
+            loadRecallCard();
             return;
         }
-        currentWord = reviewList[0];
-        
-        // 重置界面
+        currentSpellWord = spellQueue[0];
         document.getElementById('phase-spell').classList.remove('hidden');
         document.getElementById('phase-recall').classList.add('hidden');
-        document.getElementById('recall-answer').classList.add('hidden');
-        document.getElementById('recall-cover').classList.remove('hidden');
+        
+        document.getElementById('spell-meaning').innerText = currentSpellWord.meaning;
+        document.getElementById('spell-pos').innerText = currentSpellWord.pos;
         document.getElementById('input-spell').value = '';
         document.getElementById('spell-msg').innerText = '';
-        
-        // 填充内容
-        document.getElementById('study-meaning').innerText = currentWord.meaning;
-        document.getElementById('study-pos').innerText = currentWord.pos;
-        document.getElementById('study-spelling-display').innerText = currentWord.spelling;
-        document.getElementById('study-meaning-answer').innerText = currentWord.meaning;
+        document.getElementById('input-spell').focus();
     }
 
-    function checkSpelling() {
+    function submitSpelling() {
         let input = document.getElementById('input-spell').value.trim();
-        if(input.toLowerCase() === currentWord.spelling.toLowerCase()) {
-            // 拼对，进下一阶段
-            document.getElementById('phase-spell').classList.add('hidden');
-            document.getElementById('phase-recall').classList.remove('hidden');
+        if (!input) return;
+
+        if (input.toLowerCase() === currentSpellWord.spelling.toLowerCase()) {
+            // 拼对了
         } else {
-            // 拼错
-            document.getElementById('spell-msg').innerText = "不对哦，正确是: " + currentWord.spelling;
-            // 惩罚机制：拼错直接算忘
-            updateMemory(currentWord, 0);
-            saveToStorage();
+            // 拼错了
+            alert(`❌ 错了！正确写法是：${currentSpellWord.spelling}`);
+            errorSet.add(currentSpellWord); // 记入黑名单
         }
+        
+        spellQueue.shift(); // 移出队列
+        loadSpellCard();    // 下一个
+    }
+
+    // --- B. 回忆阶段 ---
+    let currentRecallWord = null;
+
+    function loadRecallCard() {
+        if (recallQueue.length === 0) {
+            finishSession();
+            return;
+        }
+        currentRecallWord = recallQueue[0];
+        
+        document.getElementById('phase-spell').classList.add('hidden');
+        document.getElementById('phase-recall').classList.remove('hidden');
+        document.getElementById('recall-cover').classList.remove('hidden');
+        document.getElementById('recall-answer').classList.add('hidden');
+        
+        document.getElementById('recall-spelling').innerText = currentRecallWord.spelling;
+        document.getElementById('recall-meaning').innerText = currentRecallWord.meaning;
+        document.getElementById('recall-pos').innerText = currentRecallWord.pos;
     }
 
     function revealAnswer() {
@@ -221,24 +307,117 @@
         document.getElementById('recall-answer').classList.remove('hidden');
     }
 
-    function rateWord(score) {
-        // 如果刚才拼写就错了，这里无论选什么，算法其实已经记过0分了。
-        // 为了简单，我们只在最后更新一次状态。
-        updateMemory(currentWord, score);
+    function rateWord(quality) {
+        // 核心逻辑：
+        // 如果拼写阶段(errorSet)有它，说明拼错了，强制判定为 0 分
+        // 如果回忆阶段自己选忘了(quality=1)，也是 0 分
+        let finalQuality = quality;
+        if (errorSet.has(currentRecallWord)) {
+            finalQuality = 0; // 拼写错，直接斩
+        }
+
+        updateMemory(currentRecallWord, finalQuality);
+        
+        recallQueue.shift();
+        loadRecallCard();
+    }
+
+    function finishSession() {
         saveToStorage();
-        reviewList.shift(); // 移除当前
-        loadNextCard();
+        // 记录统计 (今天背了 sessionWords.length 个)
+        logActivity(sessionWords.length);
+        
+        alert("🎉 今天的训练全部完成！记得去看看统计数据哦！");
+        goHome();
     }
 
-    // PWA Service Worker 注册
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('sw.js');
+    // --- 4. 录入与辅助 ---
+    function showAddModal() { 
+        document.getElementById('modal-add').classList.remove('hidden'); 
+        document.getElementById('new-spell').focus();
+    }
+    function hideAddModal() { document.getElementById('modal-add').classList.add('hidden'); renderHome(); }
+    
+    function autoFill() {
+        let w = document.getElementById('new-spell').value.toLowerCase().trim();
+        if(MINI_DICT[w]) {
+            document.getElementById('new-pos').value = MINI_DICT[w][0];
+            document.getElementById('new-meaning').value = MINI_DICT[w][1];
+            document.getElementById('new-pos').parentElement.classList.add('flash-success');
+            setTimeout(()=>document.getElementById('new-pos').parentElement.classList.remove('flash-success'),500);
+        }
     }
 
-    // 初始化
+    function saveNewWord() {
+        let s = document.getElementById('new-spell').value.trim();
+        let p = document.getElementById('new-pos').value.trim();
+        let m = document.getElementById('new-meaning').value.trim();
+        if(!s || !m) return alert("内容不完整");
+        
+        if(words.find(w => w.spelling.toLowerCase()===s.toLowerCase())) return alert("已存在");
+
+        words.push({ spelling: s, pos: p, meaning: m, nextReview: new Date().setHours(0,0,0,0), interval: 1, easeFactor: 2.5, repetitions: 0 });
+        saveToStorage();
+        
+        document.getElementById('new-spell').value = '';
+        document.getElementById('new-pos').value = '';
+        document.getElementById('new-meaning').value = '';
+        document.getElementById('new-spell').focus();
+    }
+
+    function goHome() {
+        document.getElementById('page-stats').classList.add('hidden');
+        document.getElementById('page-study').classList.add('hidden');
+        document.getElementById('page-home').classList.remove('hidden');
+        renderHome();
+    }
+
+    // --- 5. 统计界面逻辑 ---
+    function showStats() {
+        document.getElementById('page-home').classList.add('hidden');
+        document.getElementById('page-stats').classList.remove('hidden');
+        
+        // 渲染数字
+        document.getElementById('stat-total-words').innerText = words.length;
+        document.getElementById('stat-days').innerText = Object.keys(stats).length;
+        let mastered = words.filter(w => w.interval > 21).length; // 间隔大于21天视为掌握
+        document.getElementById('stat-mastered').innerText = mastered;
+
+        // 渲染图表 (最近7天)
+        let chartHtml = '';
+        let today = new Date();
+        let maxVal = 0;
+        let dataPoints = [];
+
+        // 构造过去7天的数据
+        for(let i=6; i>=0; i--) {
+            let d = new Date();
+            d.setDate(today.getDate() - i);
+            let dateStr = d.toISOString().split('T')[0];
+            let val = stats[dateStr] || 0;
+            if(val > maxVal) maxVal = val;
+            dataPoints.push({ date: dateStr.slice(5), val: val }); // 只取 MM-DD
+        }
+
+        // 避免分母为0
+        if(maxVal === 0) maxVal = 10; 
+
+        dataPoints.forEach(p => {
+            let h = (p.val / maxVal) * 100; // 百分比高度
+            let colorClass = (p.date === today.toISOString().split('T')[0].slice(5)) ? 'active' : '';
+            chartHtml += `
+                <div class="chart-bar-group">
+                    <div class="chart-bar ${colorClass}" style="height:${h}px;"></div>
+                    <div class="chart-date">${p.date}</div>
+                </div>
+            `;
+        });
+        document.getElementById('chart-week').innerHTML = chartHtml;
+    }
+
+    if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js'); }
     renderHome();
 
 </script>
 </body>
-
 </html>
