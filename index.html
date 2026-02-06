@@ -3,15 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>天天背单词 (沉浸版)</title>
+    <title>天天背单词 (完美修复版)</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#4A90E2">
     <style>
         /* --- 全局样式 --- */
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f0f4f8; margin: 0; padding: 0; height: 100vh; display: flex; flex-direction: column; }
-        .header { background: linear-gradient(135deg, #4A90E2, #67B26F); color: white; padding: 15px; text-align: center; font-size: 20px; font-weight: bold; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        .container { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; }
+        .header { background: linear-gradient(135deg, #4A90E2, #67B26F); color: white; padding: 15px; text-align: center; font-size: 20px; font-weight: bold; box-shadow: 0 2px 10px rgba(0,0,0,0.1); position: relative; z-index: 10; }
+        .container { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; z-index: 5; }
         
+        /* 关键修复：烟花层置于底层，防止挡住按钮 */
+        #confetti-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: -1; }
+
         /* 卡片 */
         .card { background: white; border-radius: 16px; padding: 20px; width: 90%; max-width: 400px; box-shadow: 0 8px 20px rgba(0,0,0,0.06); text-align: center; margin-bottom: 20px; transition: transform 0.2s; }
         
@@ -33,7 +36,7 @@
         .btn-success { background-color: #66BB6A; color: white; }
         .btn-danger { background-color: #EF5350; color: white; }
         .btn-outline { background-color: transparent; border: 2px solid #4A90E2; color: #4A90E2; box-shadow: none; }
-        .btn-speak { background: #E1F5FE; color: #0277BD; width: auto; padding: 8px 16px; border-radius: 20px; display: inline-flex; align-items: center; gap: 5px; }
+        .btn-speak { background: #E1F5FE; color: #0277BD; width: auto; padding: 8px 16px; border-radius: 20px; display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
 
         /* 输入框 */
         input[type="text"] { width: 80%; padding: 14px; font-size: 20px; border: 2px solid #eee; border-radius: 12px; margin-bottom: 15px; text-align: center; outline: none; transition: border 0.3s; }
@@ -47,9 +50,6 @@
         .shake { animation: shake 0.5s; }
         @keyframes shake { 0% { transform: translateX(0); } 25% { transform: translateX(-10px); } 75% { transform: translateX(10px); } 100% { transform: translateX(0); } }
 
-        /* 烟花画布 */
-        #confetti-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 999; }
-        
         /* 统计图表 */
         .chart-container { display: flex; align-items: flex-end; justify-content: space-between; height: 150px; padding-top: 20px; border-bottom: 1px solid #eee; width: 100%; }
         .chart-bar-group { display: flex; flex-direction: column; align-items: center; flex: 1; }
@@ -144,7 +144,7 @@
     <button class="btn btn-outline" onclick="goHome()">返回首页</button>
 </div>
 
-<div id="modal-add" class="container hidden" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index: 10;">
+<div id="modal-add" class="container hidden" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index: 20;">
     <div class="card" style="margin-top: 50px;">
         <h3>智能录入</h3>
         <div class="input-group">
@@ -159,12 +159,22 @@
 </div>
 
 <script>
-    // --- 音效系统 ---
-    // 简单的合成音效，不需要外部文件
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    
+    // --- 关键修复：延迟创建音频上下文，防止手机拦截 ---
+    let audioCtx = null; 
+
+    function initAudio() {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+    }
+
     function playTone(freq, type, duration) {
-        if(audioCtx.state === 'suspended') audioCtx.resume();
+        initAudio(); // 每次播放前尝试激活
+        if (!audioCtx) return;
+        
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
         osc.type = type;
@@ -177,26 +187,25 @@
     }
 
     function playSound(type) {
-        if (type === 'correct') {
-            // 叮~ (高频正弦波)
-            playTone(800, 'sine', 0.1);
-            setTimeout(() => playTone(1200, 'sine', 0.3), 100);
-        } else if (type === 'wrong') {
-            // 嗡... (低频锯齿波)
-            playTone(150, 'sawtooth', 0.4);
-        } else if (type === 'win') {
-            // 胜利音效
-            playTone(400, 'square', 0.1);
-            setTimeout(() => playTone(600, 'square', 0.1), 100);
-            setTimeout(() => playTone(800, 'square', 0.4), 200);
-        }
+        try {
+            if (type === 'correct') {
+                playTone(800, 'sine', 0.1);
+                setTimeout(() => playTone(1200, 'sine', 0.3), 100);
+            } else if (type === 'wrong') {
+                playTone(150, 'sawtooth', 0.4);
+            } else if (type === 'win') {
+                playTone(400, 'square', 0.1);
+                setTimeout(() => playTone(600, 'square', 0.1), 100);
+                setTimeout(() => playTone(800, 'square', 0.4), 200);
+            }
+        } catch(e) { console.log('Audio blocked', e); }
     }
 
     function speakText(text) {
         if ('speechSynthesis' in window) {
             const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = 'en-US'; // 美式发音
-            utterance.rate = 0.9; // 稍微慢一点
+            utterance.lang = 'en-US'; 
+            utterance.rate = 0.9;
             window.speechSynthesis.speak(utterance);
         }
     }
@@ -210,7 +219,6 @@
         localStorage.setItem('tiantian_stats', JSON.stringify(stats));
     }
 
-    // 更新等级显示
     function updateLevel() {
         const totalWords = words.length;
         let title = "🌱 单词萌新";
@@ -235,12 +243,14 @@
     let currentSpellWord = null, currentRecallWord = null;
 
     function startSession() {
+        // 用户点击按钮时，激活音频环境
+        initAudio();
+        
         let now = new Date().setHours(0,0,0,0);
         sessionWords = words.filter(w => w.nextReview <= now);
         if(sessionWords.length === 0) return alert("太棒了！今天没有任务啦！");
         errorSet.clear();
         
-        // 洗牌算法
         const shuffle = arr => arr.sort(() => Math.random() - 0.5);
         spellQueue = shuffle([...sessionWords]);
         recallQueue = shuffle([...sessionWords]);
@@ -250,7 +260,6 @@
         loadSpellCard();
     }
 
-    // 拼写关
     function loadSpellCard() {
         if (spellQueue.length === 0) { 
             alert("👏 第一关完成！进入口语发音关！"); 
@@ -270,13 +279,16 @@
         let input = document.getElementById('input-spell').value.trim();
         if(!input) return;
         
+        // 每次点击也尝试激活音频
+        initAudio();
+
         if (input.toLowerCase() === currentSpellWord.spelling.toLowerCase()) {
-            playSound('correct'); // 音效
+            playSound('correct');
             spellQueue.shift();
             loadSpellCard();
         } else {
-            playSound('wrong'); // 音效
-            document.getElementById('phase-spell').classList.add('shake'); // 震动特效
+            playSound('wrong');
+            document.getElementById('phase-spell').classList.add('shake');
             setTimeout(() => document.getElementById('phase-spell').classList.remove('shake'), 500);
             alert(`❌ 错了！正确写法是：${currentSpellWord.spelling}`);
             errorSet.add(currentSpellWord);
@@ -285,7 +297,6 @@
         }
     }
 
-    // 回忆关
     function loadRecallCard() {
         if (recallQueue.length === 0) { finishSession(); return; }
         currentRecallWord = recallQueue[0];
@@ -294,14 +305,13 @@
         document.getElementById('phase-recall').classList.remove('hidden');
         document.getElementById('recall-cover').classList.remove('hidden');
         document.getElementById('recall-answer').classList.add('hidden');
-        
         document.getElementById('recall-spelling').innerText = currentRecallWord.spelling;
         
-        // 自动朗读
         speakText(currentRecallWord.spelling);
     }
     
     function speakCurrentWord() {
+        initAudio();
         if(currentRecallWord) speakText(currentRecallWord.spelling);
     }
 
@@ -313,13 +323,13 @@
     }
 
     function rateWord(quality) {
+        initAudio();
         if(quality === 5) playSound('correct');
         else playSound('wrong');
 
         let finalQuality = quality;
         if (errorSet.has(currentRecallWord)) finalQuality = 0;
         
-        // SM-2 算法更新
         let w = currentRecallWord;
         if (finalQuality >= 3) {
             if (w.repetitions === 0) w.interval = 1;
@@ -345,7 +355,7 @@
         saveToStorage();
         
         playSound('win');
-        fireConfetti(); // 放烟花
+        fireConfetti();
         
         setTimeout(() => {
             alert("🎉 今天的训练全部完成！获得大量经验值！");
@@ -353,8 +363,103 @@
         }, 2000);
     }
 
-    // --- 烟花特效 (简易版) ---
+    // --- 烟花 (Z-Index 修复版) ---
     function fireConfetti() {
         const canvas = document.getElementById('confetti-canvas');
         const ctx = canvas.getContext('2d');
         canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        const particles = [];
+        const colors = ['#f00', '#0f0', '#00f', '#ff0', '#0ff', '#f0f'];
+        
+        for(let i=0; i<100; i++) {
+            particles.push({
+                x: canvas.width/2, y: canvas.height/2,
+                vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10,
+                color: colors[Math.floor(Math.random()*colors.length)],
+                life: 100
+            });
+        }
+        
+        function draw() {
+            ctx.clearRect(0,0,canvas.width,canvas.height);
+            let active = false;
+            particles.forEach(p => {
+                if(p.life > 0) {
+                    active = true;
+                    p.x += p.vx; p.y += p.vy; p.life--;
+                    ctx.fillStyle = p.color;
+                    ctx.fillRect(p.x, p.y, 5, 5);
+                }
+            });
+            if(active) requestAnimationFrame(draw);
+            else ctx.clearRect(0,0,canvas.width,canvas.height);
+        }
+        draw();
+    }
+
+    // --- 联网查词 & 页面跳转 ---
+    function fetchOnlineWord() {
+        let w = document.getElementById('new-spell').value.trim();
+        if(!w) return;
+        document.getElementById('network-status').innerText = "🔍 正在联网...";
+        let s = document.createElement('script');
+        s.src = `https://dict.youdao.com/suggest?q=${w}&num=1&doctype=json&callback=handleYoudaoResponse`;
+        document.body.appendChild(s);
+    }
+    window.handleYoudaoResponse = function(d) {
+        let status = document.getElementById('network-status');
+        if(d && d.entries && d.entries.length){
+            let e = d.entries[0].explain;
+            let m = e.match(/^([a-z]+\.)\s*(.+)$/);
+            if(m) { document.getElementById('new-pos').value=m[1]; document.getElementById('new-meaning').value=m[2].split('；')[0]; }
+            else { document.getElementById('new-pos').value=""; document.getElementById('new-meaning').value=e; }
+            status.innerText = "✅ 获取成功";
+        } else { status.innerText = "❌ 没找到，请手填"; }
+    };
+    function saveNewWord() {
+        initAudio(); // 尝试激活音频
+        let s=document.getElementById('new-spell').value.trim(), p=document.getElementById('new-pos').value, m=document.getElementById('new-meaning').value;
+        if(!s||!m) return alert("不完整");
+        if(words.find(w=>w.spelling.toLowerCase()===s.toLowerCase())) return alert("已存在");
+        words.push({spelling:s, pos:p, meaning:m, nextReview:new Date().setHours(0,0,0,0), interval:1, easeFactor:2.5, repetitions:0});
+        saveToStorage(); updateLevel();
+        document.getElementById('new-spell').value=''; document.getElementById('new-pos').value=''; document.getElementById('new-meaning').value='';
+        document.getElementById('new-spell').focus();
+    }
+    function showAddModal() { document.getElementById('modal-add').classList.remove('hidden'); document.getElementById('new-spell').focus(); }
+    function hideAddModal() { document.getElementById('modal-add').classList.add('hidden'); renderHome(); }
+    function goHome() {
+        document.getElementById('page-stats').classList.add('hidden'); document.getElementById('page-study').classList.add('hidden'); document.getElementById('page-home').classList.remove('hidden');
+        renderHome();
+    }
+    function renderHome() {
+        let count = words.filter(w => w.nextReview <= new Date().setHours(0,0,0,0)).length;
+        document.getElementById('today-count').innerText = count;
+        updateLevel();
+        document.getElementById('word-list').innerHTML = words.slice().reverse().map(w=>`
+            <div style="border-bottom:1px solid #eee; padding:10px; display:flex; justify-content:space-between; align-items:center;">
+                <span onclick="speakText('${w.spelling}')">🔊 <b>${w.spelling}</b></span>
+                <span style="font-size:14px; color:#666;">${w.meaning}</span>
+            </div>`).join('');
+    }
+    function showStats() {
+        document.getElementById('page-home').classList.add('hidden'); document.getElementById('page-stats').classList.remove('hidden');
+        document.getElementById('stat-total-words').innerText = words.length;
+        document.getElementById('stat-days').innerText = Object.keys(stats).length;
+        document.getElementById('stat-mastered').innerText = words.filter(w=>w.interval>21).length;
+        let html='', today=new Date(), max=0;
+        for(let i=6; i>=0; i--) {
+            let d=new Date(); d.setDate(today.getDate()-i); let k=d.toISOString().split('T')[0];
+            let v=stats[k]||0; if(v>max) max=v;
+            let h=(v/(max||10))*100;
+            html+=`<div class="chart-bar-group"><div class="chart-bar ${i===0?'active':''}" style="height:${h}px"></div><div class="chart-date">${k.slice(5)}</div></div>`;
+        }
+        document.getElementById('chart-week').innerHTML=html;
+    }
+    
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+    renderHome();
+</script>
+</body>
+</html>
